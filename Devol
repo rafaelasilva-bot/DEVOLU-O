@@ -1,263 +1,476 @@
-[gemini-code-1789665990311.py](https://github.com/user-attachments/files/32347144/gemini-code-1789665990311.py)
 import pandas as pd
 import streamlit as st
 import xml.etree.ElementTree as ET
 
 st.set_page_config(
-    page_title="Determinar Natureza de Operação - ERP", page_icon="⚙️"
+    page_title="Assistente de Natureza de Operação", page_icon="🎯", layout="wide"
 )
-st.title("⚙️ Mapeador de Natureza de Operação para Devoluções")
 
+st.title("🎯 Assistente de Devolução — Localizador de Natureza de Operação")
+st.markdown(
+    "Esta ferramenta identifica exclusivamente a **Natureza de Operação cadastrada no seu ERP** (ex: *1201A, 1202D, 2202E*) com base nos tributos e na origem do produto."
+)
 
-# Tabela de regras extraída da aba 'Natureza de op' do Excel da empresa
-REGRAS_NATUREZA_ERP = [
-    # CFOP 1202 / 2202 (Comprado/Revenda)
+# Tabela completa extraída da aba 'Natureza de op' do seu Excel
+REGRAS_ERP = [
+    # --- 1201: Operação Interna / Produto Fabricado ---
     {
+        "nat_op": "1201A",
+        "cod": "1201T0070",
+        "cfop": "1201",
+        "icms": "T",
+        "ipi": 0.0,
+        "pis_cofins": 70.0,
+        "desc": "Tributado ICMS / Sem Crédito PIS COFINS",
+    },
+    {
+        "nat_op": "1201B",
+        "cod": "1201T0170",
+        "cfop": "1201",
+        "icms": "T",
+        "ipi": 1.0,
+        "pis_cofins": 70.0,
+        "desc": "Tributado ICMS / IPI Alíq 0 / Sem Crédito PIS COFINS",
+    },
+    {
+        "nat_op": "1201C",
+        "cod": "1201T0354",
+        "cfop": "1201",
+        "icms": "T",
+        "ipi": 3.0,
+        "pis_cofins": 54.0,
+        "desc": "Tributado ICMS / IPI Não Trib / Com Crédito PIS COFINS",
+    },
+    {
+        "nat_op": "1201D",
+        "cod": "1201T0154",
+        "cfop": "1201",
+        "icms": "T",
+        "ipi": 1.0,
+        "pis_cofins": 54.0,
+        "desc": "Tributado ICMS / IPI Alíq 0 / Com Crédito PIS COFINS",
+    },
+    {
+        "nat_op": "1201E",
+        "cod": "1201R0154",
+        "cfop": "1201",
+        "icms": "R",
+        "ipi": 1.0,
+        "pis_cofins": 54.0,
+        "desc": "Redução ICMS / IPI Alíq 0 / Com Crédito PIS COFINS",
+    },
+    {
+        "nat_op": "1201F",
+        "cod": "1201T0173",
+        "cfop": "1201",
+        "icms": "T",
+        "ipi": 1.0,
+        "pis_cofins": 73.0,
+        "desc": "Tributado ICMS / PIS COFINS Alíquota Zero",
+    },
+    {
+        "nat_op": "1201G",
+        "cod": "1201R0173",
+        "cfop": "1201",
+        "icms": "R",
+        "ipi": 1.0,
+        "pis_cofins": 73.0,
+        "desc": "Redução ICMS / PIS COFINS Alíquota Zero",
+    },
+    {
+        "nat_op": "1201H",
+        "cod": "1201I0154",
+        "cfop": "1201",
+        "icms": "I",
+        "ipi": 1.0,
+        "pis_cofins": 54.0,
+        "desc": "Isento ICMS / Com Crédito PIS COFINS",
+    },
+    # --- 1202: Operação Interna / Produto Comprado (Revenda) ---
+    {
+        "nat_op": "1202A",
+        "cod": "1202T0070",
         "cfop": "1202",
         "icms": "T",
         "ipi": 0.0,
         "pis_cofins": 70.0,
-        "nat_op_erp": "1202A",
-        "cod_completo": "1202T0070",
+        "desc": "Tributado ICMS / Sem Crédito PIS COFINS",
     },
     {
+        "nat_op": "1202B",
+        "cod": "1202T0170",
         "cfop": "1202",
         "icms": "T",
         "ipi": 1.0,
         "pis_cofins": 70.0,
-        "nat_op_erp": "1202B",
-        "cod_completo": "1202T0170",
+        "desc": "Tributado ICMS / IPI Alíq 0 / Sem Crédito PIS COFINS",
     },
     {
+        "nat_op": "1202C",
+        "cod": "1202T0354",
         "cfop": "1202",
         "icms": "T",
         "ipi": 3.0,
         "pis_cofins": 54.0,
-        "nat_op_erp": "1202C",
-        "cod_completo": "1202T0354",
+        "desc": "Tributado ICMS / IPI Não Trib / Com Crédito PIS COFINS",
     },
     {
+        "nat_op": "1202D",
+        "cod": "1202T0154",
         "cfop": "1202",
         "icms": "T",
         "ipi": 1.0,
         "pis_cofins": 54.0,
-        "nat_op_erp": "1202D",
-        "cod_completo": "1202T0154",
+        "desc": "Tributado ICMS / IPI Alíq 0 / Com Crédito PIS COFINS",
     },
     {
+        "nat_op": "1202E",
+        "cod": "1202R0154",
         "cfop": "1202",
         "icms": "R",
         "ipi": 1.0,
         "pis_cofins": 54.0,
-        "nat_op_erp": "1202E",
-        "cod_completo": "1202R0154",
+        "desc": "Redução ICMS / IPI Alíq 0 / Com Crédito PIS COFINS",
     },
     {
+        "nat_op": "1202F",
+        "cod": "1202T0173",
         "cfop": "1202",
         "icms": "T",
         "ipi": 1.0,
         "pis_cofins": 73.0,
-        "nat_op_erp": "1202F",
-        "cod_completo": "1202T0173",
+        "desc": "Tributado ICMS / PIS COFINS Alíquota Zero",
     },
     {
+        "nat_op": "1202G",
+        "cod": "1202R0173",
         "cfop": "1202",
         "icms": "R",
         "ipi": 1.0,
         "pis_cofins": 73.0,
-        "nat_op_erp": "1202G",
-        "cod_completo": "1202R0173",
+        "desc": "Redução ICMS / PIS COFINS Alíquota Zero",
     },
     {
+        "nat_op": "1202H",
+        "cod": "1202I0354",
         "cfop": "1202",
         "icms": "I",
         "ipi": 3.0,
         "pis_cofins": 54.0,
-        "nat_op_erp": "1202H",
-        "cod_completo": "1202I0354",
+        "desc": "Isento ICMS / IPI Não Trib / Com Crédito PIS COFINS",
     },
     {
+        "nat_op": "1202I",
+        "cod": "1202I0170",
         "cfop": "1202",
         "icms": "I",
         "ipi": 1.0,
         "pis_cofins": 70.0,
-        "nat_op_erp": "1202I",
-        "cod_completo": "1202I0170",
+        "desc": "Isento ICMS / Sem Crédito PIS COFINS",
     },
     {
+        "nat_op": "1202J",
+        "cod": "1202I0173",
         "cfop": "1202",
         "icms": "I",
         "ipi": 1.0,
         "pis_cofins": 73.0,
-        "nat_op_erp": "1202J",
-        "cod_completo": "1202I0173",
+        "desc": "Isento ICMS / PIS COFINS Alíquota Zero",
     },
     {
+        "nat_op": "1202K",
+        "cod": "1202T0054",
         "cfop": "1202",
         "icms": "T",
         "ipi": 0.0,
         "pis_cofins": 54.0,
-        "nat_op_erp": "1202K",
-        "cod_completo": "1202T0054",
+        "desc": "Tributado ICMS / IPI c/ Crédito / Com Crédito PIS COFINS",
     },
-    # CFOP 2202 (Interestadual Comprado/Revenda)
+    # --- 2201: Operação Interestadual / Produto Fabricado ---
     {
+        "nat_op": "2201A",
+        "cod": "2201T0070",
+        "cfop": "2201",
+        "icms": "T",
+        "ipi": 0.0,
+        "pis_cofins": 70.0,
+        "desc": "Tributado ICMS / Sem Crédito PIS COFINS",
+    },
+    {
+        "nat_op": "2201B",
+        "cod": "2201T0170",
+        "cfop": "2201",
+        "icms": "T",
+        "ipi": 1.0,
+        "pis_cofins": 70.0,
+        "desc": "Tributado ICMS / IPI Alíq 0 / Sem Crédito PIS COFINS",
+    },
+    {
+        "nat_op": "2201C",
+        "cod": "2201T0354",
+        "cfop": "2201",
+        "icms": "T",
+        "ipi": 3.0,
+        "pis_cofins": 54.0,
+        "desc": "Tributado ICMS / IPI Não Trib / Com Crédito PIS COFINS",
+    },
+    {
+        "nat_op": "2201D",
+        "cod": "2201T0154",
+        "cfop": "2201",
+        "icms": "T",
+        "ipi": 1.0,
+        "pis_cofins": 54.0,
+        "desc": "Tributado ICMS / IPI Alíq 0 / Com Crédito PIS COFINS",
+    },
+    {
+        "nat_op": "2201E",
+        "cod": "2201R0154",
+        "cfop": "2201",
+        "icms": "R",
+        "ipi": 1.0,
+        "pis_cofins": 54.0,
+        "desc": "Redução ICMS / IPI Alíq 0 / Com Crédito PIS COFINS",
+    },
+    {
+        "nat_op": "2201F",
+        "cod": "2201T0173",
+        "cfop": "2201",
+        "icms": "T",
+        "ipi": 1.0,
+        "pis_cofins": 73.0,
+        "desc": "Tributado ICMS / PIS COFINS Alíquota Zero",
+    },
+    {
+        "nat_op": "2201G",
+        "cod": "2201R0173",
+        "cfop": "2201",
+        "icms": "R",
+        "ipi": 1.0,
+        "pis_cofins": 73.0,
+        "desc": "Redução ICMS / PIS COFINS Alíquota Zero",
+    },
+    # --- 2202: Operação Interestadual / Produto Comprado (Revenda) ---
+    {
+        "nat_op": "2202A",
+        "cod": "2202T0070",
         "cfop": "2202",
         "icms": "T",
         "ipi": 0.0,
         "pis_cofins": 70.0,
-        "nat_op_erp": "2202A",
-        "cod_completo": "2202T0070",
+        "desc": "Tributado ICMS / Sem Crédito PIS COFINS",
     },
     {
+        "nat_op": "2202B",
+        "cod": "2202T0170",
         "cfop": "2202",
         "icms": "T",
         "ipi": 1.0,
         "pis_cofins": 70.0,
-        "nat_op_erp": "2202B",
-        "cod_completo": "2202T0170",
+        "desc": "Tributado ICMS / IPI Alíq 0 / Sem Crédito PIS COFINS",
     },
     {
+        "nat_op": "2202C",
+        "cod": "2202T0354",
         "cfop": "2202",
         "icms": "T",
         "ipi": 3.0,
         "pis_cofins": 54.0,
-        "nat_op_erp": "2202C",
-        "cod_completo": "2202T0354",
+        "desc": "Tributado ICMS / IPI Não Trib / Com Crédito PIS COFINS",
     },
     {
+        "nat_op": "2202D",
+        "cod": "2202T0154",
         "cfop": "2202",
         "icms": "T",
         "ipi": 1.0,
         "pis_cofins": 54.0,
-        "nat_op_erp": "2202D",
-        "cod_completo": "2202T0154",
+        "desc": "Tributado ICMS / IPI Alíq 0 / Com Crédito PIS COFINS",
     },
     {
+        "nat_op": "2202E",
+        "cod": "2202R0154",
         "cfop": "2202",
         "icms": "R",
         "ipi": 1.0,
         "pis_cofins": 54.0,
-        "nat_op_erp": "2202E",
-        "cod_completo": "2202R0154",
+        "desc": "Redução ICMS / IPI Alíq 0 / Com Crédito PIS COFINS",
     },
     {
+        "nat_op": "2202F",
+        "cod": "2202T0173",
         "cfop": "2202",
         "icms": "T",
         "ipi": 1.0,
         "pis_cofins": 73.0,
-        "nat_op_erp": "2202F",
-        "cod_completo": "2202T0173",
+        "desc": "Tributado ICMS / PIS COFINS Alíquota Zero",
     },
     {
+        "nat_op": "2202G",
+        "cod": "2202R0173",
         "cfop": "2202",
         "icms": "R",
         "ipi": 1.0,
         "pis_cofins": 73.0,
-        "nat_op_erp": "2202G",
-        "cod_completo": "2202R0173",
+        "desc": "Redução ICMS / PIS COFINS Alíquota Zero",
     },
     {
+        "nat_op": "2202H",
+        "cod": "2202R0170",
         "cfop": "2202",
         "icms": "R",
         "ipi": 1.0,
         "pis_cofins": 70.0,
-        "nat_op_erp": "2202H",
-        "cod_completo": "2202R0170",
+        "desc": "Redução ICMS / Sem Crédito PIS COFINS",
     },
     {
+        "nat_op": "2202I",
+        "cod": "2202T0054",
         "cfop": "2202",
         "icms": "T",
         "ipi": 0.0,
         "pis_cofins": 54.0,
-        "nat_op_erp": "2202I",
-        "cod_completo": "2202T0054",
+        "desc": "Tributado ICMS / IPI c/ Crédito / Com Crédito PIS COFINS",
     },
 ]
 
 
-def encontrar_natureza_operacao(
-    cfop_origem, uf_emit, uf_dest, forma_obtencao, trib_icms, cst_ipi, cst_pis
-):
-    # 1. Determina se é operação Interna (1.xxx) ou Interestadual (2.xxx)
-    operacao_interna = uf_emit == uf_dest
-
-    if forma_obtencao == "Fabricado":
-        cfop_base = "1201" if operacao_interna else "2201"
-    else:
-        cfop_base = "1202" if operacao_interna else "2202"
-
-    # 2. Busca na matriz de regras do ERP
-    for regra in REGRAS_NATUREZA_ERP:
+def buscar_nat_op(cfop_base, icms, ipi, pis_cofins):
+    for r in REGRAS_ERP:
         if (
-            regra["cfop"] == cfop_base
-            and regra["icms"] == trib_icms
-            and regra["ipi"] == float(cst_ipi)
-            and regra["pis_cofins"] == float(cst_pis)
+            r["cfop"] == cfop_base
+            and r["icms"] == icms
+            and r["ipi"] == float(ipi)
+            and r["pis_cofins"] == float(pis_cofins)
         ):
-            return {
-                "CFOP_Entrada": cfop_base,
-                "NAT_OP_ERP": regra["nat_op_erp"],
-                "COD_COMPLETO": regra["cod_completo"],
-            }
-
-    # Fallback caso não encontre combinação exata de tributação
-    return {
-        "CFOP_Entrada": cfop_base,
-        "NAT_OP_ERP": f"{cfop_base} (Padrão)",
-        "COD_COMPLETO": "Não Mapeada",
-    }
+            return r
+    return None
 
 
-# Formulário Interativo / Leitor
-st.subheader("Simulação para Nota de Origem com CFOP 6102")
+tab1, tab2, tab3 = st.tabs(
+    [
+        "🎛️ Consulta Rápida por Regra",
+        "📄 Ler Nota via XML",
+        "📋 Ver Tabela de Naturezas ERP",
+    ]
+)
 
-col1, col2 = st.columns(2)
-
-with col1:
-    uf_cliente = st.selectbox(
-        "UF Emitente (Cliente)",
-        ["SP", "RJ", "MG", "PR", "SC", "RS"],
-        index=0,
-    )
-    uf_empresa = st.selectbox(
-        "UF Destinatário (Sua Empresa)",
-        ["SP", "RJ", "MG", "PR", "SC", "RS"],
-        index=0,
-    )
-    cfop_origem = st.text_input("CFOP da Nota de Saída/Cliente", "6102")
-    forma_obtencao = st.selectbox(
-        "Forma de Obtenção do Item", ["Comprado", "Fabricado"]
+with tab1:
+    st.subheader(
+        "Informe as Condições da Nota para obter a Natureza de Operação"
     )
 
-with col2:
-    trib_icms = st.selectbox(
-        "Tributação ICMS (Aba CST ICMS)",
-        ["T", "R", "I"],
-        help="T = Tributada | R = Reduzida | I = Isenta",
-    )
-    cst_ipi = st.selectbox(
-        "CST IPI Entrada",
-        [0.0, 1.0, 3.0],
-        help="0 = Com Crédito | 1 = Alíq Zero | 3 = N Tributado",
-    )
-    cst_pis = st.selectbox(
-        "CST PIS/COFINS Entrada",
-        [54.0, 70.0, 73.0],
-        help="54 = Com Crédito | 70 = Sem Crédito | 73 = Alíq Zero",
+    col1, col2 = st.columns(2)
+    with col1:
+        uf_emit = st.selectbox(
+            "UF do Cliente (Emitente NFD)",
+            ["SP", "RJ", "MG", "PR", "SC", "RS", "BA", "GO", "PE", "CE"],
+            index=1,
+        )
+        uf_dest = st.selectbox(
+            "UF da Sua Empresa (Destinatário)",
+            ["SP", "RJ", "MG", "PR", "SC", "RS"],
+            index=0,
+        )
+        forma_obt = st.selectbox(
+            "Forma de Obtenção do Item",
+            ["Comprado", "Fabricado"],
+            help="Fabricado = Família 1201/2201 | Comprado = Família 1202/2202",
+        )
+
+    with col2:
+        icms = st.selectbox(
+            "Situação ICMS (Aba CST ICMS)",
+            ["T", "R", "I"],
+            help="T = Tributado | R = Reduzido | I = Isento",
+        )
+        ipi = st.selectbox(
+            "CST IPI de Entrada",
+            [1.0, 0.0, 3.0],
+            help="1 = Trib Alíquota Zero | 0 = Com Crédito | 3 = Não Tributado",
+        )
+        pis_cofins = st.selectbox(
+            "CST PIS/COFINS de Entrada",
+            [54.0, 70.0, 73.0],
+            help="54 = Com Crédito | 70 = Sem Crédito | 73 = Alíquota Zero",
+        )
+
+    if st.button("🔍 Encontrar Natureza de Operação", type="primary"):
+        is_interna = uf_emit == uf_dest
+        cfop_base = (
+            ("1201" if is_interna else "2201")
+            if forma_obt == "Fabricado"
+            else ("1202" if is_interna else "2202")
+        )
+
+        resultado = buscar_nat_op(cfop_base, icms, ipi, pis_cofins)
+
+        if resultado:
+            st.success(f"### Natureza de Operação ERP: **{resultado['nat_op']}**")
+            st.metric(label="Código da Natureza no ERP", value=resultado["nat_op"])
+            st.info(
+                f"**Código Interno (Chave):** `{resultado['cod']}`\n\n**Descrição Fiscal:** {resultado['desc']}"
+            )
+        else:
+            st.warning(
+                f"Nenhuma Natureza de Operação cadastrada para a combinação: CFOP Base {cfop_base} | ICMS {icms} | IPI {ipi} | PIS {pis_cofins}"
+            )
+
+with tab2:
+    st.subheader("Upload do XML da NF-e")
+    xml_file = st.file_uploader(
+        "Arraste e solte o XML enviado pelo cliente", type=["xml"]
     )
 
-if st.button("Buscar Natureza de Operação do ERP"):
-    resultado = encontrar_natureza_operacao(
-        cfop_origem,
-        uf_cliente,
-        uf_empresa,
-        forma_obtencao,
-        trib_icms,
-        cst_ipi,
-        cst_pis,
-    )
+    if xml_file:
+        try:
+            tree = ET.parse(xml_file)
+            root = tree.getroot()
+            ns = {"nfe": "http://www.portalfiscal.inf.br/nfe"}
 
-    st.success(f"### Natureza de Operação ERP: **{resultado['NAT_OP_ERP']}**")
-    st.write(f"**CFOP de Entrada:** {resultado['CFOP_Entrada']}")
-    st.write(f"**Código Interno / Mapeamento:** `{resultado['COD_COMPLETO']}`")
+            uf_emit = root.find(".//nfe:emit/nfe:enderEmit/nfe:UF", ns).text
+            uf_dest = root.find(".//nfe:dest/nfe:enderDest/nfe:UF", ns).text
+
+            st.info(
+                f"📍 **Origem:** {uf_emit} -> **Destino:** {uf_dest} ({'Operação Interna' if uf_emit == uf_dest else 'Operação Interestadual'})"
+            )
+
+            forma_obt = st.radio(
+                "Selecione a Origem dos Itens no seu cadastro",
+                ["Comprado", "Fabricado"],
+                horizontal=True,
+            )
+            icms = st.selectbox("ICMS da Operação", ["T", "R", "I"], key="xml_icms")
+            ipi = st.selectbox("CST IPI Entrada", [1.0, 0.0, 3.0], key="xml_ipi")
+            pis_cofins = st.selectbox(
+                "CST PIS/COFINS Entrada", [54.0, 70.0, 73.0], key="xml_pis"
+            )
+
+            if st.button("Determinar Natureza do XML"):
+                is_interna = uf_emit == uf_dest
+                cfop_base = (
+                    ("1201" if is_interna else "2201")
+                    if forma_obt == "Fabricado"
+                    else ("1202" if is_interna else "2202")
+                )
+                resultado = buscar_nat_op(cfop_base, icms, ipi, pis_cofins)
+                if resultado:
+                    st.success(
+                        f"### Use no ERP: Natureza **{resultado['nat_op']}** (Código `{resultado['cod']}`)"
+                    )
+        except Exception as e:
+            st.error(f"Erro ao ler o XML: {e}")
+
+with tab3:
+    st.subheader("Tabela Completa de Naturezas de Operação do seu ERP")
+    df_regras = pd.DataFrame(REGRAS_ERP)
+    df_regras.columns = [
+        "Natureza ERP",
+        "Código Interno",
+        "CFOP Base",
+        "ICMS",
+        "CST IPI",
+        "CST PIS/COFINS",
+        "Descrição da Operação",
+    ]
+    st.dataframe(df_regras, use_container_width=True)
